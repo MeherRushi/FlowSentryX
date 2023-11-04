@@ -77,6 +77,58 @@ Finally, I also want to add a lot of references for my learning. I will probably
 Learning eBPF and XDP repo. I am not sure whether I should add references for this work or not.
 
 
+### Title : FlowSentryX
+
+#### Description : It is a XDP-based L3 DOS and DDOS Mitigation Framework
+
+For now we are doing layer 3 based DOS mitigation
+
+### System Architecture
+
+- **Kernel Space Program** : 
+   - _Packet Parsing_ - Write programs for parsing the packets and doing the checks.
+   - _Map Creation and updation_ 
+      - The plan is to create 2 Maps - Rate of Packet Arrival(per sec) per IP, and a normal Black listed IP table.
+      - The packet arrival per IP per sec table is going to be updated with the count of the packet and then we need to refresh the table every one second for now - The algorithm that is going to be used is the simple Fixed window algorithm. 
+      - We pick the blacklisted to the BlackList IP table and drop the packets for that particular IP.  
+   - _I think that is it_
+
+- **User Space Program** :
+   - _Clear the BlackList IP table_ - 
+   - _Read the data_ from the table and print it in a nice format maybe
+
+   Upcoming plans for user space :
+   
+   _Configuration and Management_: In the user space, you can create a management component for configuring the threshold values and maintaining the blocklist. You can use user-level tools or scripts to configure the XDP program parameters.
+
+   _Reporting and Logging_: Implement logging and reporting mechanisms in user space to monitor the status of your DDoS prevention system. You can store logs, generate alerts, and maintain historical data.
+
+   _Dynamic Rules Management_: You can create a user space component that communicates with the kernel space to add or remove IP addresses from the blocklist dynamically.
+
+
+ 
+   
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # XDP-based DOS and DDOS Mitigation Framework
 
 ## Table of Contents
