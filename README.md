@@ -38,8 +38,10 @@ We also plan to extend the ability BlackList IP addresses and write rules manual
    - [Token bucket Rate Limiting](#3-token-bucket-rate-limiting)  
 
 5. [ML Model for DDOS mitigation](#)
-   - [](#)
-   - [](#)
+   - [Choice of Model](#)
+   - [Model Training](#)
+   - [Feature Extraction](#)
+   - [Real time Inference](#)
 
 6. [References](#references)
 7. [Project Status](#project-status) 
@@ -101,15 +103,15 @@ Refer to [Dependencies](Dependencies.md).
    Extracted Information required for Debian or Ubuntu
 
    Need to install
-   - ✅ libxdp
-   - ✅ xdp-tools 
-   - ✅ libbpf
-   - ✅ llvm
-   - ✅ clang
-   - ✅ libelf-dev
-   - ✅ libpcap-dev 
-   - ✅ build-essential
-   - ✅ sudo apt-get install -y gcc-multilib (On x86_64 PC, the gcc-multilib debian package makes a symbol link at "/usr/include/asm" to "/usr/include/x86_64-linux-gnu".
+   - [x] libxdp
+   - [x] xdp-tools 
+   - [x] libbpf
+   - [x] llvm
+   - [x] clang
+   - [x] libelf-dev
+   - [x] libpcap-dev 
+   - [x] build-essential
+   - [x] sudo apt-get install -y gcc-multilib (On x86_64 PC, the gcc-multilib debian package makes a symbol link at "/usr/include/asm" to "/usr/include/x86_64-linux-gnu".
    I guess that on the ARM32 system (Raspbian) /usr/include/asm might linked to /usr/include/aarch64-linux-gnu or arm-linux-gnueabihf)
 
 
@@ -118,6 +120,7 @@ To install the framework, follow these steps:
 
 1. Step-by-step installation instructions.
 2. Include any scripts or commands necessary for setup.
+3. Submodules - Installation
 
 ### Usage
 Provide guidance on how to use the framework:
@@ -125,6 +128,7 @@ Provide guidance on how to use the framework:
 1. Command-line options and arguments.
 2. Configuration files if applicable.
 3. Example usage scenarios.
+
 
 
 ## System Architecture
