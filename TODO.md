@@ -228,3 +228,16 @@ Include contact information for questions, suggestions, or collaboration.
 Give thanks to individuals or organizations that have supported or contributed to the project.
 
 
+# Maps
+
+So for now we are going to settle for a LRU_HASH type map. We will think about other stuff like LPM_trie later
+
+okay okay okay, so we be doing packet dropping based on threshold value of per IP. If some IP bombards the server with an excess number of packets, drop it for a while. 
+
+That's the plan
+
+
+so we will have the following maps:
+1) IPv4 stats map (key - IPV4 address and value is a struct with pps and bps and track_time - It is the time when the packet of a particular IP first comes)
+
+2) IPv6 stats map (key - IPV6 address and value is a struct with pps and bps and track_time - It is the time when the packet of a particular IP comes)
