@@ -241,3 +241,10 @@ so we will have the following maps:
 1) IPv4 stats map (key - IPV4 address and value is a struct with pps and bps and track_time - It is the time when the packet of a particular IP first comes)
 
 2) IPv6 stats map (key - IPV6 address and value is a struct with pps and bps and track_time - It is the time when the packet of a particular IP comes)
+
+
+## Note
+
+from the trail_kern.c file I realised that if there is a Map of size 1 , then we can access the key as index 0 but we have to NULL case handling ourseleves, or else the verifier will reject the program.
+
+We can access the key value of anything less than MAX_entries value in the bpf_map_type_array

@@ -14,9 +14,10 @@ in the fsx_struct.h map */
 #include "fsx_struct.h"
 
 /* Map declarations 
- We have 4 maps that we need to consider :
+ We have 5 maps that we need to consider :
+
     1) stats_map - To store global variables - 1 entry
-    of a struct which stores the total number of packets
+    of a struct which stores the total number of packets5
     dropped and no of packets that are not dropped. 
     Since  this is a BPF_MAP_TYPE_ARRAY, we can access
     the element using the index 0. Ass it is the 
@@ -47,7 +48,6 @@ in the fsx_struct.h map */
 
     We have different maps for IPv4 adn IPv6 because of the 
     different key size i.e __u32 and __u128 respectively
-
 */
 struct 
 {
@@ -93,16 +93,14 @@ struct
 SEC("xdp_prog")
 int xdp_prog_main(struct xdp_md *ctx)
 {
-    //Initialize the data pointers for the packet
+    /* Initialize the data pointers for the packet */
     void *data_end = (void *)(long)ctx->data_end;
     void *data = (void *)(long)ctx->data;
 
     struct ethhdr *eth;
-    /* Default action XDP_PASS, imply everything we couldn't parse, or that
-	 * we don't want to deal with, we just pass up the stack and let the
-	 * kernel deal with it.
-	 */
-	__u32 action = XDP_PASS; /* Default action */
+    struct iphdr *ip4hdr = NULL;
+    struct ipv6hdr *ip6hdr = NULL;
+
 
     /* These keep track of the next header type and iterator pointer */
 	struct hdr_cursor nh;
@@ -116,20 +114,168 @@ int xdp_prog_main(struct xdp_md *ctx)
 	 * header type in the packet correct?), and bounds checking.
 	 */
 	nh_type = parse_ethhdr(&nh, data_end, &eth);
-    if(nh_type == -1) return XDP_DROP;	
-	else if (nh_type != bpf_htons(ETH_P_IPV6) || nh_type != bpf_htons(ETH_P_IP))			
-		goto out;				// Just pass the packet cause we only want to drop malicious IP packets
-
-    /* Setting the default block time to 5 minutes (300 seconds) */
-    __u64 blocktime = 300; 
-
-
-
-
+    if(nh_type == -1) 
+    {
+        return XDP_DROP;	//Invalid packet parsing- Not considered the packet parsing
+    }
+	else if (nh_type != bpf_htons(ETH_P_IPV6) || nh_type != bpf_htons(ETH_P_IP)) 
+    {
+        return XDP_PASS; // Non IPv4 adn Non IPv6 packets - These are not considered in the stats as well
+    }
 
 
-    out :
-        return XDP_PASS;
+    /* Setting the default bloAccuracy per epoch : 9.889240506329115
+ck time to 5 minutes (300 seconds) */
+    __u64 block_for_time = 300; 
+    __u128 srcip6 = 0;
+
+    if(nh_type == bpf_htons(ETH_P_IPV6))
+    {
+        nh_type = parse_ip6hdr(&nh,data_end,&ip6hdr);
+        if(nh_type == -1) return XDP_DROP; // Invalid Packet Parsing Drop
+        memcpy(&srcip6,&ip6hdr->saddr.in6_u.u6_addr32,sizeof(srcip6));
+    }
+    else
+    {
+        nh_type = parse_ip4hdr(&nh,data_end,&ip4hdr);
+        if(nh_type == -1) return XDP_DROP; // Invalid Packet Parsing Drop
+    }
+
+    __u64 now = bpf_ktime_get_ns();
+    __u64 *ip_blocked_till_time = NULL;
+
+    /* So, we first get data from the blacklist ip table regarding
+    whether the ip address of the current packet is in the blacklist
+    or not, if it present then we retrive the time till which it should
+    be blacklisted. After that we decide whether to drop the current 
+    packet or not based on the above factors. */
+
+    if(ip6hdr)
+    {
+        ip_blocked_till_time = bpf_map_lookup_elem(&ipv6_blacklist_map,&srcip6);
+    }
+    else if(ip4hdr)
+    {
+        ip_blocked_till_time = bpf_map_lookup_elem(&ipv4_blacklist_map,&ip4hdr->saddr);
+    }
+    
+    /* Accessing the stats map */
+    __u32 stats_map_key = 0;
+    struct stats *stats = bpf_map_lookup_elem(&stats_map,&stats_map_key);
+
+
+    /* If the IP is in the blacklist table (i.e, ip_blocked_till_time != NULL)
+    then there is a high chance that we might need to drop this one as well
+    so we first do that check before proceed to track the ip stats */
+
+    if(ip_blocked_till_time != NULL && *ip_blocked_till_time > 0)
+    {
+        bpf_printk("Checking for blocked packet... Block time %llu.\n", *ip_blocked_till_time);
+
+        if(now > *ip_blocked_till_time)
+        {
+            // Remove element from map.
+            if (ip6hdr)
+            {
+                bpf_map_delete_elem(&ipv6_blacklist_map, &srcip6);
+            }
+            else if (ip4hdr)
+            {
+                bpf_map_delete_elem(&ipv4_blacklist_map, &ip4hdr->saddr);
+            }
+        }
+        else
+        {   
+            // Increase with drop count in stats map
+            if(stats)
+            {
+                stats->dropped++;
+            }
+            // The time currently is less the time that it should be blocked till 
+            // so we still drop the packet
+            return XDP_DROP;
+        }
+    }
+
+    /* If packet is not to be dropped, then it will contribute to the
+    no of pps and bps . So here we update the ip_stats maps for ipv4
+    and ipv6 maps */
+
+    __u64 pps = 0;
+    __u64 bps = 0;
+
+    struct ip_stats *ip_stats = NULL;
+
+    if(ip6hdr)
+    {
+        ip_stats = bpf_map_lookup_elem(&ipv6_stats_map, &srcip6);
+    }
+    else if(ip4hdr)
+    {
+        ip_stats = bpf_map_lookup_elem(&ipv4_stats_map, &ip4hdr->saddr);
+    }
+
+    /* We first have to check if there is a entry for that particular ip
+    in the ip_stats table. If it is not there we create one, and if it is 
+    already there, then we check whether we need to refresh the stats 
+    so as to keep track of the count per second(i.e if the now - track_time 
+    of the entry) > 1 sec (10^9 nanosec). We reset the values to zero and start from
+    scratch.*/
+
+    if(ip_stats)
+    {
+        if(now - ip_stats->track_time > 1000000000)
+        {
+            ip_stats->pps = 0;
+            ip_stats->bps = 0;
+            ip_stats->track_time = now;
+        }
+        else
+        {
+            // Increment PPS and BPS using built-in functions.
+            // We use sync_fetch_and_add for avoiding synchronization problems
+            // This could be further improved by using a per_cpu_array
+            // instead of a normal array and shifting the totalling calculation
+            // to the user space.
+            __sync_fetch_and_add(&ip_stats->pps, 1);
+            __sync_fetch_and_add(&ip_stats->bps, ctx->data_end - ctx->data);
+            
+            pps = ip_stats->pps;
+            bps = ip_stats->bps;
+        }
+    }
+    else
+    {
+        struct ip_stats new;
+
+        new.pps = 1;
+        new.bps = ctx->data_end - ctx->data;
+        new.track_time = now;
+
+        pps = new.pps;
+        bps = new.bps;
+
+
+        if (ip6hdr)
+        {
+            bpf_map_update_elem(&ipv6_stats_map, &srcip6, &new, BPF_ANY);
+        }
+        else if (ip4hdr)
+        {
+            bpf_map_update_elem(&ipv4_stats_map, &ip4hdr->saddr, &new, BPF_ANY);
+        } 
+    }
+
+
+
+
+
+
+
+
+
+
+
 
 }
 

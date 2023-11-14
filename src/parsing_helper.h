@@ -56,7 +56,7 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh,
 	/* Byte-count bounds check; check if current pointer + size of header
 	 * is after data_end.
 	 */
-	if (nh->pos + hdrsize > data_end)
+	if (nh->pos + hdrsize > data_end)		// Incorrect pointer case
 		return -1;
 
 	nh->pos += hdrsize;	//next header has been shifted now
