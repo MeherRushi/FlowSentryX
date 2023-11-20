@@ -151,10 +151,6 @@ static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
 	nh->pos = icmp6h + 1;
 	*icmp6hdr = icmp6h;
 
-	// int seq = bpf_ntohs(icmp6h->icmp6_sequence);
-	// bpf_printk("seq=%d",seq);
-	// return seq;
-
 	return icmp6h->icmp6_type;
 
 }
