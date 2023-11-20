@@ -113,6 +113,11 @@ int xdp_prog_main(struct xdp_md *ctx)
 	 * parsing fails. Each helper function does sanity checking (is the
 	 * header type in the packet correct?), and bounds checking.
 	 */
+
+    /* Ignore non IP based packets - we donot filter them and let the system 
+    handle such packets. Ideally in deployment phase we can block these packets
+    or extend our filtering system to other layer 3 protocols */
+
 	nh_type = parse_ethhdr(&nh, data_end, &eth);
     if(nh_type == -1) 
     {
@@ -123,12 +128,10 @@ int xdp_prog_main(struct xdp_md *ctx)
         return XDP_PASS; // Non IPv4 adn Non IPv6 packets - These are not considered in the stats as well
     }
 
-
-    /* Setting the default bloAccuracy per epoch : 9.889240506329115
-ck time to 5 minutes (300 seconds) */
-    __u64 block_for_time = 300; 
     __u128 srcip6 = 0;
 
+
+    /* We figure out if the packet is of  IPv4 or IPv6 type*/
     if(nh_type == bpf_htons(ETH_P_IPV6))
     {
         nh_type = parse_ip6hdr(&nh,data_end,&ip6hdr);
@@ -159,7 +162,10 @@ ck time to 5 minutes (300 seconds) */
         ip_blocked_till_time = bpf_map_lookup_elem(&ipv4_blacklist_map,&ip4hdr->saddr);
     }
     
-    /* Accessing the stats map */
+    /* Accessing the stats map - Since it is a single element array. The value of the
+    struct will be stored at index 0, so we set the stats_map_key to 0 and access the
+    stats struct*/
+
     __u32 stats_map_key = 0;
     struct stats *stats = bpf_map_lookup_elem(&stats_map,&stats_map_key);
 
@@ -218,7 +224,7 @@ ck time to 5 minutes (300 seconds) */
     /* We first have to check if there is a entry for that particular ip
     in the ip_stats table. If it is not there we create one, and if it is 
     already there, then we check whether we need to refresh the stats 
-    so as to keep track of the count per second(i.e if the now - track_time 
+    so as to keep track of the count per second (i.e if the now - track_time 
     of the entry) > 1 sec (10^9 nanosec). We reset the values to zero and start from
     scratch.*/
 
@@ -255,7 +261,6 @@ ck time to 5 minutes (300 seconds) */
         pps = new.pps;
         bps = new.bps;
 
-
         if (ip6hdr)
         {
             bpf_map_update_elem(&ipv6_stats_map, &srcip6, &new, BPF_ANY);
@@ -266,28 +271,65 @@ ck time to 5 minutes (300 seconds) */
         } 
     }
 
+    /* Here, we should write the packet parsing checks for layer 4 protocols
+    Extension will be made to cover protocols such as TCP, UDP and ICMPv4 and v6 */
+    
+
+    /* Now, after all the updatation and basic checks on the packet have been 
+    performed we will now go on implement the most basic rate limiting of static
+    window thresholding algorithm. That is if the number of packets of any of the
+    IP address is more than the threshold we drop the packet and add the IP to the 
+    IP blacklist table for a particular amount of time (blocked_for_time) and also
+    we update the global variables in the stats map */
+
+    /* One potential Idea for rate limiting - We plan to introduce a factor of dynamic 
+    nature to the rate limiting algorithm. Instead of setting a hard threshold per IP
+    address, we set a total over-all threshold and we divide it by the number of IP's 
+    that are connected to the device since the last 1 hour or so. Improvement to the 
+    algortihm will be made and since this would lead to more computational requirements
+    we can move it to the user space  */
 
 
+    /* 
+       Setting the default block time to 5 minutes (300 seconds) 
+       Setting the default pps threshold as 1000000 packets (1 million packets)
+       Setting the default bps threshold as 125000 GigaBytes per second (1Gbps - 1 Gigabit per second)
+    */
+    __u64 blocked_for_time = 300; 
+    __u64 pps_threshold = 1000000;
+    __u64 bps_threshold = 500 ;
 
+    if(pps > pps_threshold || bps > bps_threshold)
+    {
+        // Add the IP to the blacklist table and drop the packet
+        // also update the drop count
 
+        __u64 new_ip_blocked_till_time = now + (blocked_for_time * 1000000000);
 
+        if(ip6hdr)
+        {
+            bpf_map_update_elem(&ipv6_blacklist_map, &srcip6, &new_ip_blocked_till_time, BPF_ANY);
+        }
+        else if(ip4hdr)
+        {
+            bpf_map_update_elem(&ipv4_blacklist_map, &ip4hdr->saddr, &new_ip_blocked_till_time, BPF_ANY);
+        }
 
+        if(stats) // Implementing access checks are compulsory else the ebpf verifier will not load it to the kernel
 
+        {   
+            stats->dropped++;
+        }
+        return XDP_DROP;
+    }
 
-
-
+    // update the allowed count and XDP_PASS. Implementing access checks are
+    // compulsory else the ebpf verifier will not load it to the kernel
+    if(stats)
+    {   
+        stats->allowed++;
+    }
+    
+    return XDP_PASS;
 
 }
-
-/* Packet parsing till the IP layer and updating the maps
- based on the IP address. Also refreshing the map after every
- 60 seconds and shifting the IP to the Blacklist IP map. */
-
-
-
-
-
-
-
-
- /* Dropping packets whose IP is in the Blacklist IP map */
