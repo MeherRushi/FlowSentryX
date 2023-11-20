@@ -16,9 +16,9 @@ struct stats
 
 struct ip_stats
 {
-    __u64 pps;
-    __u64 bps;
-    __u64 track_time;
+    __u64 pps;          // packets per second
+    __u64 bps;          // bytes per second
+    __u64 track_time;   // time at which the packet arrived
 };
 
 
