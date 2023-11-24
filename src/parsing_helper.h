@@ -108,7 +108,7 @@ static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 
 /* Function to parse the IPv4 header */
 
-static __always_inline int parse_iphdr(struct hdr_cursor *nh,
+static 	 int parse_ip4hdr(struct hdr_cursor *nh,
                                         void *data_end,
                                         struct iphdr **iphdr)
 {

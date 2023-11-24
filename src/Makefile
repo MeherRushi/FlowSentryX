@@ -1,20 +1,22 @@
-TARGETS = trail
+TARGETS = fsx
+HEADERS = fsx_struct.h parsing_helper.h
+INCLUDE_DIRS = -I/usr/include/$(shell uname -m)-linux-gnu -I .
 
-all : $(TARGETS)
+
+all: $(TARGETS)
 .PHONY: all
 
-$(TARGETS): % : %_kern.o
+$(TARGETS): % : %_kern.o 
 
-%_kern.o : %_kern.c
+
+%_kern.o :%_kern.c $(HEADERS)
 	clang \
-	    -target bpf \
-		-I/usr/include/$(shell uname -m)-linux-gnu \
+		-target bpf \
+		$(INCLUDE_DIRS)  \
 		-g \
-	    -Wall \
-	    -O2 -o $@ -c $<
+		-w \
+		-O2 -o $@ -c $<
 
 clean:
 	- rm *.o 
-	- rm -f /sys/fs/bpf/$(TARGETS) 
-
-
+	- rm -f /sys/fs/bpf/$(TARGETS)

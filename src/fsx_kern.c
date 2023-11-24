@@ -10,8 +10,12 @@ are in the parsing_herlper.h header file
 and structure of the values of the maps are
 in the fsx_struct.h map */
 
-#include "parsing_helper.h"
 #include "fsx_struct.h"
+#include "parsing_helper.h"
+
+#ifndef memcpy
+#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
+#endif
 
 /* Map declarations 
  We have 5 maps that we need to consider :
@@ -90,8 +94,8 @@ struct
 } ipv6_blacklist_map SEC(".maps");
 
 
-SEC("xdp_prog")
-int xdp_prog_main(struct xdp_md *ctx)
+SEC("xdp")
+int fsx(struct xdp_md *ctx)
 {
     /* Initialize the data pointers for the packet */
     void *data_end = (void *)(long)ctx->data_end;
@@ -123,13 +127,12 @@ int xdp_prog_main(struct xdp_md *ctx)
     {
         return XDP_DROP;	//Invalid packet parsing- Not considered the packet parsing
     }
-	else if (nh_type != bpf_htons(ETH_P_IPV6) || nh_type != bpf_htons(ETH_P_IP)) 
+	else if (nh_type != bpf_htons(ETH_P_IPV6) && nh_type != bpf_htons(ETH_P_IP)) 
     {
         return XDP_PASS; // Non IPv4 adn Non IPv6 packets - These are not considered in the stats as well
     }
 
     __u128 srcip6 = 0;
-
 
     /* We figure out if the packet is of  IPv4 or IPv6 type*/
     if(nh_type == bpf_htons(ETH_P_IPV6))
@@ -144,6 +147,9 @@ int xdp_prog_main(struct xdp_md *ctx)
         if(nh_type == -1) return XDP_DROP; // Invalid Packet Parsing Drop
     }
 
+
+
+
     __u64 now = bpf_ktime_get_ns();
     __u64 *ip_blocked_till_time = NULL;
 
@@ -156,10 +162,18 @@ int xdp_prog_main(struct xdp_md *ctx)
     if(ip6hdr)
     {
         ip_blocked_till_time = bpf_map_lookup_elem(&ipv6_blacklist_map,&srcip6);
+        bpf_printk("ip6hder addr found in map");
+        //bpf_printk("ipv6 packet address %llu\n",srcip6);
     }
     else if(ip4hdr)
     {
         ip_blocked_till_time = bpf_map_lookup_elem(&ipv4_blacklist_map,&ip4hdr->saddr);
+        // for debugging purposes
+        bpf_printk("IPv4 source address: %u.%u.%u.%u\n",
+                   ip4hdr->saddr & 0xFF,
+                   (ip4hdr->saddr >> 8) & 0xFF,
+                   (ip4hdr->saddr >> 16) & 0xFF,
+                   (ip4hdr->saddr >> 24) & 0xFF);
     }
     
     /* Accessing the stats map - Since it is a single element array. The value of the
@@ -295,9 +309,9 @@ int xdp_prog_main(struct xdp_md *ctx)
        Setting the default pps threshold as 1000000 packets (1 million packets)
        Setting the default bps threshold as 125000 GigaBytes per second (1Gbps - 1 Gigabit per second)
     */
-    __u64 blocked_for_time = 300; 
-    __u64 pps_threshold = 1000000;
-    __u64 bps_threshold = 500 ;
+    __u64 blocked_for_time = 10; 
+    __u64 pps_threshold = 1000000000;
+    __u64 bps_threshold = 125000000 ;
 
     if(pps > pps_threshold || bps > bps_threshold)
     {
@@ -318,7 +332,9 @@ int xdp_prog_main(struct xdp_md *ctx)
         if(stats) // Implementing access checks are compulsory else the ebpf verifier will not load it to the kernel
 
         {   
+            bpf_printk("Rate limit exceeded \n pps : %llu \n bps : %llu \n", pps, bps);
             stats->dropped++;
+            bpf_printk("No of packets dropped %llu\n", stats->dropped);
         }
         return XDP_DROP;
     }
@@ -328,8 +344,11 @@ int xdp_prog_main(struct xdp_md *ctx)
     if(stats)
     {   
         stats->allowed++;
+        bpf_printk("No of packets allowed %llu\n", stats->allowed);
     }
+
     
     return XDP_PASS;
-
 }
+
+char _license[] SEC("license") = "GPL";
