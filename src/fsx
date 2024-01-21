@@ -1,0 +1,99 @@
+#!/bin/bash
+
+
+
+: '
+
+navigate to the directory where the script is located and run the following command
+1 make
+2 sudo ip link set dev <interface> edpgeneric obj <file name = in main directory > sec xdp
+
+to stop
+1 ip link dev link set dev <iinterface > edpgeneric off
+2 make clean
+
+
+
+
+
+
+sudo bpftool prog tracelog = for showing pack output at specified interface
+
+
+'
+
+# Define the name of the thing
+THING_NAME="fsx_test"
+
+# Set default values for options
+VERBOSE=false
+PACKETS_PARAMETER=false
+BLOCK_TIME=10               # time in minutes
+PACKETS_THRESHOLD=1000000   # packets allowed per second
+BYTES_THRESHOLD=125000000   # bytes allowed per second
+# Check for the correct number of arguments
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
+    exit 1
+fi
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        start)
+            COMMAND="start"
+            ;;
+        stop)
+            COMMAND="stop"
+            ;;
+        -v)
+            VERBOSE=true
+            ;;
+        -p=*)
+            
+            PACKETS_PARAMETER=true
+            PACKETS_THRESHOLD="${1#*=}"
+            ;;
+        *)
+            echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# Start or stop the thing based on the command
+case "$COMMAND" in
+    start)
+        echo "Performing initialization actions for $THING_NAME..."
+
+
+        # Check options and perform actions accordingly
+        if [ "$VERBOSE" = true ]; then
+            echo "Verbose mode enabled"
+        fi
+
+        if [ "$PACKETS_PARAMETER" = true ]; then
+            echo "PACKETS_THRESHOLD=${PACKETS_THRESHOLD}"
+        fi
+
+        # Update the file with the new values
+
+        echo "PACKETS_THRESHOLD=$PACKETS_THRESHOLD" > fsx_user.c
+
+
+        
+
+        # Add your logic to start the thing here
+        ;;
+    stop)
+        echo "Performing stop actions for $THING_NAME..."
+        # Add your logic to stop the thing here
+        ;;
+    *)
+        echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
+        exit 1
+        ;;
+esac
+
+exit 0
