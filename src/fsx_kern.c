@@ -312,9 +312,9 @@ int fsx(struct xdp_md *ctx)
        Setting the default pps threshold as 1000000 packets (1 million packets)
        Setting the default bps threshold as 125000 GigaBytes per second (1Gbps - 1 Gigabit per second)
     */
-    __u64 blocked_for_time = 10; 
-    __u64 pps_threshold = 1000;
-    __u64 bps_threshold = 125000000 ;
+    __u64 blocked_for_time = BLOCK_TIME; 
+    __u64 pps_threshold = PACKETS_THRESHOLD;
+    __u64 bps_threshold = BYTES_THRESHOLD;
 
     if(pps > pps_threshold || bps > bps_threshold)
     {
