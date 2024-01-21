@@ -1,0 +1,56 @@
+#! /bin/sh
+
+USAGE="Usage: `basename $0` [-hv] [-o arg] args"
+
+# we want at least one parameter (it may be a flag or an argument)
+if [ $# -eq 0 ]; then
+	echo $USAGE 
+	exit 1
+fi
+
+THING_NAME="fsx_thing"
+
+
+
+case "$1" in
+    start)
+        echo "Starting $THING_NAME..."
+        # Add your logic to start the thing here
+        # parse command line arguments
+        while getopts hvo: OPT; do
+            case "$OPT" in
+            h)	echo $USAGE
+                exit 0
+                ;;
+            v)	echo "`basename $0` version 0.1"
+                exit 0
+                ;;
+            o)	OUTPUT_FILE=$OPTARG
+                echo "output file = $OUTPUT_FILE"
+                ;;
+            \?)	# getopts issues an error message
+                echo $USAGE >&2
+                exit 1
+                ;;
+            esac
+        done
+
+
+        ;;
+    stop)
+        echo "Stopping $THING_NAME..."
+        # Add your logic to stop the thing here
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+
+shift `expr $OPTIND - 1`
+
+# access additional parameters through $@ or $* as usual or using this loop:
+for PARAM; do
+    echo $PARAM
+done
