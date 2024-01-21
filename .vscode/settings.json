@@ -1,5 +1,10 @@
 {
     "files.associations": {
-        "bpf_helpers.h": "c"
+        "bpf_helpers.h": "c",
+        "in.h": "c",
+        "fsx_struct.h": "c",
+        "bpf_endian.h": "c",
+        "if_ether.h": "c",
+        "bpf.h": "c"
     }
 }

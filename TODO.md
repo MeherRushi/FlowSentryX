@@ -248,3 +248,24 @@ so we will have the following maps:
 from the trail_kern.c file I realised that if there is a Map of size 1 , then we can access the key as index 0 but we have to NULL case handling ourseleves, or else the verifier will reject the program.
 
 We can access the key value of anything less than MAX_entries value in the bpf_map_type_array
+
+Todo rn
+- [] Update the readme as and when required
+- [] Need to create the testing phase
+- [] Add experimentation folder or add the details and notes in readme
+- [] sumodules
+- [] comments updation
+- [] system design diagram
+- [] update make file
+- [] adding userspace programs
+
+## errors
+
+bpftool prog load fsx_kern.o /sys/fs/bpf/fsx
+libbpf: Failed to bump RLIMIT_MEMLOCK (err = -1), you might need to do it explicitly!
+libbpf: Error in bpf_object__probe_loading():Operation not permitted(1). Couldn't load trivial BPF program. Make sure your kernel supports BPF (CONFIG_BPF_SYSCALL=y) and/or that RLIMIT_MEMLOCK is set to big enough value.
+libbpf: failed to load object 'fsx_kern.o'
+Error: failed to load object file
+
+Error resolved by using SUDO command
+> sudo bpftool prog load fsx_kern.o /sys/fs/bpf/fsx

@@ -1,6 +1,6 @@
 # FlowSentryX
 
-![Progress](https://img.shields.io/badge/Progress-25%25-yellow)
+![Progress](https://img.shields.io/badge/Progress-42%25-yellow)
 
 ### An XDP-based DOS and DDOS Mitigation Framework
 
@@ -126,6 +126,11 @@ To install the framework, follow these steps:
 Provide guidance on how to use the framework:
 
 1. Command-line options and arguments.
+
+   - After installation of the framework. Run the script
+
+
+
 2. Configuration files if applicable.
 3. Example usage scenarios.
 

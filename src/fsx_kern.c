@@ -169,11 +169,14 @@ int fsx(struct xdp_md *ctx)
     {
         ip_blocked_till_time = bpf_map_lookup_elem(&ipv4_blacklist_map,&ip4hdr->saddr);
         // for debugging purposes
-        bpf_printk("IPv4 source address: %u.%u.%u.%u\n",
+        bpf_printk("IPv4 source address: %u.%u.",
                    ip4hdr->saddr & 0xFF,
-                   (ip4hdr->saddr >> 8) & 0xFF,
+                   (ip4hdr->saddr >> 8) & 0xFF);        
+        
+        bpf_printk("%u.%u\n",
                    (ip4hdr->saddr >> 16) & 0xFF,
-                   (ip4hdr->saddr >> 24) & 0xFF);
+                   (ip4hdr->saddr >> 24) & 0xFF);               
+
     }
     
     /* Accessing the stats map - Since it is a single element array. The value of the
@@ -310,7 +313,7 @@ int fsx(struct xdp_md *ctx)
        Setting the default bps threshold as 125000 GigaBytes per second (1Gbps - 1 Gigabit per second)
     */
     __u64 blocked_for_time = 10; 
-    __u64 pps_threshold = 1000000000;
+    __u64 pps_threshold = 1000;
     __u64 bps_threshold = 125000000 ;
 
     if(pps > pps_threshold || bps > bps_threshold)
