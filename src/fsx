@@ -1,56 +1,99 @@
-#! /bin/sh
+#!/bin/bash
 
-USAGE="Usage: `basename $0` [-hv] [-o arg] args"
 
-# we want at least one parameter (it may be a flag or an argument)
-if [ $# -eq 0 ]; then
-	echo $USAGE 
-	exit 1
+
+: '
+
+navigate to the directory where the script is located and run the following command
+1 make
+2 sudo ip link set dev <interface> edpgeneric obj <file name = in main directory > sec xdp
+
+to stop
+1 ip link dev link set dev <iinterface > edpgeneric off
+2 make clean
+
+
+
+
+
+
+sudo bpftool prog tracelog = for showing pack output at specified interface
+
+
+'
+
+# Define the name of the thing
+THING_NAME="fsx_test"
+
+# Set default values for options
+VERBOSE=false
+PACKETS_PARAMETER=false
+BLOCK_TIME=10               # time in minutes
+PACKETS_THRESHOLD=1000000   # packets allowed per second
+BYTES_THRESHOLD=125000000   # bytes allowed per second
+# Check for the correct number of arguments
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
+    exit 1
 fi
 
-THING_NAME="fsx_thing"
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        start)
+            COMMAND="start"
+            ;;
+        stop)
+            COMMAND="stop"
+            ;;
+        -v)
+            VERBOSE=true
+            ;;
+        -p=*)
+            
+            PACKETS_PARAMETER=true
+            PACKETS_THRESHOLD="${1#*=}"
+            ;;
+        *)
+            echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
+            exit 1
+            ;;
+    esac
+    shift
+done
 
-
-
-case "$1" in
+# Start or stop the thing based on the command
+case "$COMMAND" in
     start)
-        echo "Starting $THING_NAME..."
+        echo "Performing initialization actions for $THING_NAME..."
+
+
+        # Check options and perform actions accordingly
+        if [ "$VERBOSE" = true ]; then
+            echo "Verbose mode enabled"
+        fi
+
+        if [ "$PACKETS_PARAMETER" = true ]; then
+            echo "PACKETS_THRESHOLD=${PACKETS_THRESHOLD}"
+        fi
+
+        # Update the file with the new values
+
+        echo "PACKETS_THRESHOLD=$PACKETS_THRESHOLD" > fsx_user.c
+
+
+        
+
         # Add your logic to start the thing here
-        # parse command line arguments
-        while getopts hvo: OPT; do
-            case "$OPT" in
-            h)	echo $USAGE
-                exit 0
-                ;;
-            v)	echo "`basename $0` version 0.1"
-                exit 0
-                ;;
-            o)	OUTPUT_FILE=$OPTARG
-                echo "output file = $OUTPUT_FILE"
-                ;;
-            \?)	# getopts issues an error message
-                echo $USAGE >&2
-                exit 1
-                ;;
-            esac
-        done
-
-
         ;;
     stop)
-        echo "Stopping $THING_NAME..."
+        echo "Performing stop actions for $THING_NAME..."
         # Add your logic to stop the thing here
         ;;
     *)
-        echo "Usage: $0 {start|stop}"
+        echo "Usage: $0 {start|stop} [-v] [-p=<value>]"
         exit 1
         ;;
 esac
 
-
-shift `expr $OPTIND - 1`
-
-# access additional parameters through $@ or $* as usual or using this loop:
-for PARAM; do
-    echo $PARAM
-done
+exit 0
