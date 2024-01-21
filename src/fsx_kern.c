@@ -61,6 +61,14 @@ struct
     __type(value, struct stats);
 }stats_map SEC(".maps");
 
+struct 
+{
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, MAX_TRACK_IPS);
+    __type(key, __u32);
+    __type(value, struct leaky_bucket);
+}bucket_array SEC(".maps");
+
 struct
 {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -146,8 +154,6 @@ int fsx(struct xdp_md *ctx)
         nh_type = parse_ip4hdr(&nh,data_end,&ip4hdr);
         if(nh_type == -1) return XDP_DROP; // Invalid Packet Parsing Drop
     }
-
-
 
 
     __u64 now = bpf_ktime_get_ns();
@@ -245,48 +251,9 @@ int fsx(struct xdp_md *ctx)
     of the entry) > 1 sec (10^9 nanosec). We reset the values to zero and start from
     scratch.*/
 
-    if(ip_stats)
-    {
-        if(now - ip_stats->track_time > 1000000000)
-        {
-            ip_stats->pps = 0;
-            ip_stats->bps = 0;
-            ip_stats->track_time = now;
-        }
-        else
-        {
-            // Increment PPS and BPS using built-in functions.
-            // We use sync_fetch_and_add for avoiding synchronization problems
-            // This could be further improved by using a per_cpu_array
-            // instead of a normal array and shifting the totalling calculation
-            // to the user space.
-            __sync_fetch_and_add(&ip_stats->pps, 1);
-            __sync_fetch_and_add(&ip_stats->bps, ctx->data_end - ctx->data);
-            
-            pps = ip_stats->pps;
-            bps = ip_stats->bps;
-        }
-    }
-    else
-    {
-        struct ip_stats new;
+    
 
-        new.pps = 1;
-        new.bps = ctx->data_end - ctx->data;
-        new.track_time = now;
-
-        pps = new.pps;
-        bps = new.bps;
-
-        if (ip6hdr)
-        {
-            bpf_map_update_elem(&ipv6_stats_map, &srcip6, &new, BPF_ANY);
-        }
-        else if (ip4hdr)
-        {
-            bpf_map_update_elem(&ipv4_stats_map, &ip4hdr->saddr, &new, BPF_ANY);
-        } 
-    }
+//    struct token_bucket* token_bucket = NULL;\
 
     /* Here, we should write the packet parsing checks for layer 4 protocols
     Extension will be made to cover protocols such as TCP, UDP and ICMPv4 and v6 */
@@ -312,12 +279,59 @@ int fsx(struct xdp_md *ctx)
        Setting the default pps threshold as 1000000 packets (1 million packets)
        Setting the default bps threshold as 125000 GigaBytes per second (1Gbps - 1 Gigabit per second)
     */
-    __u64 blocked_for_time = 10; 
-    __u64 pps_threshold = 1000;
-    __u64 bps_threshold = 125000000 ;
-
-    if(pps > pps_threshold || bps > bps_threshold)
+    __u64 blocked_for_time = BLOCK_TIME; 
+    __u64 pps_threshold = PACKETS_THRESHOLD;
+    __u64 bps_threshold = BYTES_THRESHOLD;
+    __u64 c = CASE_CODE;
+    __u64 size = 1;
+    struct leaky_bucket* leaky_bucket = NULL;
+// Fixed Window Rate Limiting
+    switch(c){
+    case 1:
+        if(ip_stats)
     {
+        if(now - ip_stats->track_time > 1000000000)
+        {
+            ip_stats->pps = 0;
+            ip_stats->bps = 0;
+            ip_stats->track_time = now;
+        }
+        else
+        {
+            // Increment PPS and BPS using built-in functions.
+            // We use sync_fetch_and_add for avoiding synchronization problems
+            // This could be further improved by using a per_cpu_array
+            // instead of a normal array and shifting the totalling calculation
+            // to the user space.
+            __sync_fetch_and_add(&ip_stats->pps, 1);
+            __sync_fetch_and_add(&ip_stats->bps, ctx->data_end - ctx->data);
+
+            pps = ip_stats->pps;
+            bps = ip_stats->bps;
+        }
+    }
+    else
+    {
+        struct ip_stats new;
+
+        new.pps = 1;
+        new.bps = ctx->data_end - ctx->data;
+        new.track_time = now;
+
+        pps = new.pps;
+        bps = new.bps;
+
+        if (ip6hdr)
+        {
+            bpf_map_update_elem(&ipv6_stats_map, &srcip6, &new, BPF_ANY);
+        }
+        else if (ip4hdr)
+        {
+            bpf_map_update_elem(&ipv4_stats_map, &ip4hdr->saddr, &new, BPF_ANY);
+        } 
+    }
+        if(pps > pps_threshold || bps > bps_threshold)
+        {
         // Add the IP to the blacklist table and drop the packet
         // also update the drop count
 
@@ -340,18 +354,126 @@ int fsx(struct xdp_md *ctx)
             bpf_printk("No of packets dropped %llu\n", stats->dropped);
         }
         return XDP_DROP;
-    }
+        }
+        // update the allowed count and XDP_PASS. Implementing access checks are
+        // compulsory else the ebpf verifier will not load it to the kernel
+        if(stats)
+        {   
+            stats->allowed++;
+            bpf_printk("Passed through Fixed Window\n");    
+            bpf_printk("No. of packets allowed %llu\n", stats->allowed);
+        }
+        return XDP_PASS;
+        break;
 
-    // update the allowed count and XDP_PASS. Implementing access checks are
-    // compulsory else the ebpf verifier will not load it to the kernel
-    if(stats)
-    {   
-        stats->allowed++;
-        bpf_printk("No of packets allowed %llu\n", stats->allowed);
-    }
+    case 2:
+        if(ip4hdr)
+        {
+            leaky_bucket = bpf_map_lookup_elem(&bucket_array, &ip4hdr->saddr);
+        }
+        if(leaky_bucket)
+        {
+            __sync_fetch_and_add(&leaky_bucket->size, 1);
+            size = leaky_bucket->size;
+        }
+        else
+        {
+            struct leaky_bucket new;
+            new.size = size;
+            new.rate = EMPTY_RATE;
+            new.arrival_time = now;
+            if(ip4hdr)
+            {
+                bpf_map_update_elem(&bucket_array, &ip4hdr->saddr, &new, BPF_ANY);
+            }
+        }
+    // Leaky Bucket Rate Limiting
 
-    
-    return XDP_PASS;
+        if(size >= BUCKET_SIZE)
+        {
+            // Add the IP to the blacklist table and drop the packet
+            // also update the drop count
+
+            __u64 new_ip_blocked_till_time = now + (blocked_for_time * 1000000000);
+
+            if(ip6hdr)
+            {
+                bpf_map_update_elem(&ipv6_blacklist_map, &srcip6, &new_ip_blocked_till_time, BPF_ANY);
+            }
+            else if(ip4hdr)
+            {
+                bpf_map_update_elem(&ipv4_blacklist_map, &ip4hdr->saddr, &new_ip_blocked_till_time, BPF_ANY);
+            }
+
+            if(stats) // Implementing access checks are compulsory else the ebpf verifier will not load it to the kernel
+
+            {   
+                //bpf_printk("Rate limit exceeded \n pps : %llu \n bps : %llu \n", pps, bps);
+                stats->dropped++;
+                //bpf_printk("No of packets dropped %llu\n", stats->dropped);
+            }
+            return XDP_DROP;
+        }
+
+        // update the allowed count and XDP_PASS. Implementing access checks are
+        // compulsory else the ebpf verifier will not load it to the kernel
+        if(stats)
+        {   
+            stats->allowed++;
+            __u64 time_dif = 0;
+            if(leaky_bucket)
+            {
+                if(now > leaky_bucket->arrival_time){
+                    time_dif = now - leaky_bucket->arrival_time;
+                }
+                if(leaky_bucket->size > (leaky_bucket->rate * time_dif))
+                    leaky_bucket->size = leaky_bucket->size - (leaky_bucket->rate * time_dif);
+                else
+                    leaky_bucket->size = 0;
+                leaky_bucket->arrival_time = now;
+                bpf_printk("No. of packets allowed %llu\n", stats->allowed);
+            }
+        }
+        return XDP_PASS;
+        break;
+    default:   
+        bpf_printk("Rate Limiting algo error");
+    }
 }
 
 char _license[] SEC("license") = "GPL";
+
+// Token Bucket Rate Limiting
+
+//     if(token_bucket->tokens <= 0)
+//     {
+//         // Add the IP to the blacklist table and drop the packet
+//         // also update the drop count
+
+//         __u64 new_ip_blocked_till_time = now + (blocked_for_time * 1000000000);
+
+//         if(ip6hdr)
+//         {
+//             bpf_map_update_elem(&ipv6_blacklist_map, &srcip6, &new_ip_blocked_till_time, BPF_ANY);
+//         }
+//         else if(ip4hdr)
+//         {
+//             bpf_map_update_elem(&ipv4_blacklist_map, &ip4hdr->saddr, &new_ip_blocked_till_time, BPF_ANY);
+//         }
+
+//         if(stats) // Implementing access checks are compulsory else the ebpf verifier will not load it to the kernel
+
+//         {   
+//             bpf_printk("Rate limit exceeded \n pps : %llu \n bps : %llu \n", pps, bps);
+//             stats->dropped++;
+//             bpf_printk("No of packets dropped %llu\n", stats->dropped);
+//         }
+//         return XDP_DROP;
+//     }
+//     else
+//     {
+//         token_bucket->tokens += (now - token_bucket->refillTime) * REFILL_RATE;
+//         if(token_bucket->tokens > token_bucket->maxTokens){
+//             token_bucket->tokens = token_bucket->maxTokens;
+//         }
+//     }
