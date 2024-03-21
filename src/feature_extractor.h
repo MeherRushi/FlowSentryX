@@ -18,6 +18,8 @@ struct packet_info {
 struct feature_info{
 	__u64 sum;
 	__u64 sum_squared;
+    __u64 sum_size;
+    __u64 sum_size_squared;
 	__u64 fwd_iat_sum;
 	__u64 fwd_iat_sum_squared;
     __u32 count;
@@ -70,8 +72,9 @@ int packet_feature_extractor(struct __sk_buff *skb) {
     if (ip + 1 > data_end)
         return 0;
 
-    // Get packet length
-    __u32 packet_len = ntohs(ip->tot_len);
+    // Get packet length and packet size
+    __u64 packet_len = bpf_ntohs(ip->tot_len);
+    __u64 packet_size = bpf_ntohs(ip->tot_len) + sizeof(struct ethhdr);
 
     // Calculate fwd_iat
     __u64 now = bpf_ktime_get_ns();
@@ -96,6 +99,8 @@ int packet_feature_extractor(struct __sk_buff *skb) {
         // Update mean and sum_squared
         __sync_fetch_and_add(&info->sum, packet_len);
         __sync_fetch_and_add(&info->sum_squared, packet_len * packet_len);
+        __sync_fetch_and_add(&info->sum_size, packet_size);
+        __sync_fetch_and_add(&info->sum_size_squared, packet_size * packet_size);
 		__sync_fetch_and_add(&info->fwd_iat_sum, fwd_iat);
 		__sync_fetch_and_add(&info->fwd_iat_sum_squared, fwd_iat * fwd_iat);
         __sync_fetch_and_add(&info->count, 1);
@@ -118,6 +123,8 @@ int syscall__sys_enter_recvmsg(struct trace_event_raw_sys_enter *ctx) {
     struct feature_info{
         __u64 sum;
         __u64 sum_squared;
+        __u64 sum_size;
+        __u64 sum_size_squared;
 		__u64 fwd_iat_sum;
 		__u64 fwd_iat_sum_squared;
         __u32 count;
@@ -126,8 +133,10 @@ int syscall__sys_enter_recvmsg(struct trace_event_raw_sys_enter *ctx) {
     if (info) {
         // Calculate mean and variance
         __u64 mean_packet_len = calc_mean(info->sum, info->count);
+        __u64 mean_packet_size = calc_mean(info->sum_size, info->count);
         __u64 mean_fwd_iat = calc_mean(info->fwd_iat_sum, info->count);
         __u64 var_packet_len = calc_variance(info->sum, info->sum_squared, info->count);
+        __u64 var_packet_size = calc_variance(info->sum, info->sum_size_squared, info->count);
         __u64 var_fwd_iat = calc_variance(info->fwd_iat_sum, info->fwd_iat_sum_squared, info->count);
         
 		//Use the produced variables
