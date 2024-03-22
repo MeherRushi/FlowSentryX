@@ -1,0 +1,62 @@
+#!/bin/bash
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: $0 [start|stop] [-d]"
+    exit 1
+fi
+
+detached=false
+
+# Check if detached mode flag is provided
+if [ "$2" == "-d" ]; then
+    detached=true
+fi
+
+if [ "$1" == "start" ]; then
+    # Navigate to src directory
+    cd src/
+
+    # Run make
+    make
+
+    # Disassemble the object file
+    if [ "$detached" = true ]; then
+        llvm-objdump -S fsx_kern.o > /dev/null
+    else
+        llvm-objdump -S fsx_kern.o
+    fi
+
+
+    # Set XDP program for loopback interface
+    sudo ip link set dev lo xdpgeneric obj fsx_kern.o sec xdp
+
+    # Trace log for the BPF program
+    if [ "$detached" = false ]; then
+        sudo bpftool prog trace log
+    fi
+
+elif [ "$1" == "stop" ]; then
+    # Turn off XDP program for loopback interface
+    sudo ip link set dev lo xdpgeneric off
+
+    # Navigate to src directory
+    cd src/
+
+    # Clean the directory
+    sudo make clean
+
+    # Return to the parent directory
+    cd ..
+
+else
+    echo "Invalid option. Usage: $0 [start|stop] [-d]"
+    exit 1
+fi
+
+# Check if running in detached mode
+if [ "$detached" = true ]; then
+    echo "Script running in detached mode."
+else
+    echo "Script execution complete."
+fi
+
