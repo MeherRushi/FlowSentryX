@@ -17,6 +17,14 @@ b = BPF(text=bpf_program)
 w = (torch.load('./src/model_weights.pth'))
 print(w)
 
+for i in range(len(w['linear._packed_params._packed_params'][0])):
+    b["q_weight_param"][i] = w['linear._packed_params._packed_params'][0][i]
+
+b["q_weight_param"][8] = w['linear._packed_params._packed_params'][1] # bias value
+
+# Pining the map to the map path
+pinned_map_path = "/sys/fs/bpf/q_weight_param"
+b['q_weight_param'].pin(pinned_map_path)
 
 
 """
