@@ -4,6 +4,7 @@
 #include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
 #include "fsx_struct.h"
 #include "parsing_helper.h"
 
@@ -55,10 +56,10 @@ static inline __u64 calc_variance(__u64 sum, __u64 sum_squared, __u32 count) {
     return count > 1 ? (sum_squared + ((mean - 2*sum)*mean)) / (count-1) : 0;
 }
 
-int packet_feature_extractor(struct __sk_buff *skb) {
+static inline int packet_feature_extractor(struct xdp_md *ctx) {
     // Get packet data
-    void *data = (void *)(long)skb->data;
-    void *data_end = (void *)(long)skb->data_end;
+    void *data = (void *)(long)ctx->data;
+    void *data_end = (void *)(long)ctx->data_end;
 
     // Check if packet is TCP
     struct ethhdr *eth = data;
@@ -79,12 +80,12 @@ int packet_feature_extractor(struct __sk_buff *skb) {
     // Calculate fwd_iat
     __u64 now = bpf_ktime_get_ns();
     __u32 fwd_iat = 0;
-    __u64 *last_timestamp = skb->cb;
+    __u64 *last_timestamp = ctx->cb;
     if (last_timestamp) {
         fwd_iat = now - *last_timestamp;
         *last_timestamp = now;
     } else {
-        skb->cb[0] = now;
+        ctx->cb[0] = now;
     }
 
     // Update statistics

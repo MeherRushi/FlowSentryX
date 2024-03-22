@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
+#include <stddef.h>
 #include <linux/bpf.h>
 #include <linux/in.h>
 #include <bpf/bpf_helpers.h>
@@ -52,6 +53,8 @@ in the fsx_struct.h map */
 
     We have different maps for IPv4 adn IPv6 because of the
     different key size i.e __u32 and __u128 respectively
+
+    6) feature_stats map
 */
 struct
 {
@@ -93,7 +96,22 @@ struct
     __type(value, __u64);
 } ipv6_blacklist_map SEC(".maps");
 
-/* Reading from the pinned map */
+// BPF hash map to store statistics
+struct
+{
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 8);
+    __type(key, __u32);
+    __type(value, struct feature_info);
+} feature_stats SEC(".maps");
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 1); // We only need to store the timestamp of the last packet
+    __type(key, __u32);
+    __type(value, struct packet_timestamp);
+} packet_timestamps SEC(".maps");
 
 /*
 Since the kernel has the following restrictions :
@@ -136,6 +154,11 @@ int fsx(struct xdp_md *ctx)
     struct ethhdr *eth;
     struct iphdr *ip4hdr = NULL;
     struct ipv6hdr *ip6hdr = NULL;
+    struct tcphdr *tcphdr;
+    struct udphdr *udphdr;
+
+    /* Packet parsing */
+    struct packet_info pkt_info = {};
 
     /* These keep track of the next header type and iterator pointer */
     struct hdr_cursor nh;
@@ -166,21 +189,73 @@ int fsx(struct xdp_md *ctx)
     __u128 srcip6 = 0;
 
     /* We figure out if the packet is of  IPv4 or IPv6 type*/
-    if (nh_type == bpf_htons(ETH_P_IPV6))
+
+    if (nh_type == bpf_htons(ETH_P_IPV6)) // This is IPV6
     {
         nh_type = parse_ip6hdr(&nh, data_end, &ip6hdr);
         if (nh_type == -1)
             return XDP_DROP; // Invalid Packet Parsing Drop
         memcpy(&srcip6, &ip6hdr->saddr.in6_u.u6_addr32, sizeof(srcip6));
+
+        if (nh_type == 6) // TCP packet
+        {
+            /* Parse TCP header */
+            if (parse_tcphdr(&nh, data_end, &tcphdr) == -1)
+            {
+                return XDP_DROP; // Drop packet if TCP header parsing fails
+            }
+            /* Extract destination port */
+            pkt_info.dest_port = bpf_ntohs(tcphdr->dest);
+        }
+        else if (nh_type == 17) // UDP packet
+        {
+            if (parse_udphdr(&nh, data_end, &udphdr) == -1)
+            {
+                return XDP_DROP; // Drop packet if TCP header parsing fails
+            }
+            /* Extract destination port */
+            pkt_info.dest_port = bpf_ntohs(udphdr->dest);
+        }
+
+        /* Calculate packet length */
+        pkt_info.packet_len = bpf_ntohs(ip6hdr->payload_len);
     }
     else
     {
         nh_type = parse_ip4hdr(&nh, data_end, &ip4hdr);
         if (nh_type == -1)
             return XDP_DROP; // Invalid Packet Parsing Drop
+
+        if (nh_type == 6) // TCP packet
+        {
+            /* Parse TCP header */
+            if (parse_tcphdr(&nh, data_end, &tcphdr) == -1)
+            {
+                return XDP_DROP; // Drop packet if TCP header parsing fails
+            }
+            /* Extract destination port */
+            pkt_info.dest_port = bpf_ntohs(tcphdr->dest);
+        }
+        else if (nh_type == 17) // UDP packet
+        {
+            if (parse_udphdr(&nh, data_end, &udphdr) == -1)
+            {
+                return XDP_DROP; // Drop packet if TCP header parsing fails
+            }
+            /* Extract destination port */
+            pkt_info.dest_port = bpf_ntohs(udphdr->dest);
+        }
+
+        /* Calculate packet length */
+        pkt_info.packet_len = bpf_ntohs(ip4hdr->tot_len);
     }
 
     __u64 now = bpf_ktime_get_ns();
+
+    __u64 prev_timestamp = get_packet_timestamp();
+    pkt_info.fwd_iat = now - prev_timestamp;
+    update_packet_timestamp(now); // Update timestamp for the next packet
+
     __u64 *ip_blocked_till_time = NULL;
 
     /* So, we first get data from the blacklist ip table regarding
@@ -374,27 +449,80 @@ int fsx(struct xdp_md *ctx)
     trained model*/
 
     /* Accessing the pinned map */
-    int map_fd;
-    int *weights;
-    int bias;
+    /*     int map_fd;
+        int *weights;
+        int bias;
 
-    map_fd = bpf_obj_get(PINNED_MAP_PATH);
-    if (map_fd < 0)
-    {
-        perror("Failed to open pinned map");
-        return 0; // Error handling
+        map_fd = bpf_obj_get(PINNED_MAP_PATH);
+        if (map_fd < 0)
+        {
+            perror("Failed to open pinned map");
+            return 0; // Error handling
+        }
+
+        // try and read the values of weights and bias
+
+        // Close the file descriptor
+        close(map_fd);
+    */
+
+    /* Update feature statistics */
+    update_feature_stats(DESTINATION_PORT, pkt_info.dest_port);
+    update_feature_stats(PACKET_LENGTH_MEAN, pkt_info.packet_len);
+    update_feature_stats(PACKET_LENGTH_STD, pkt_info.packet_len);
+    update_feature_stats(PACKET_LENGTH_VARIANCE, pkt_info.packet_len);
+    update_feature_stats(AVERAGE_PACKET_SIZE, pkt_info.packet_len);
+    update_feature_stats(FWD_IAT_MEAN, pkt_info.fwd_iat);
+
+    // Model input struct
+    struct model_input model_in = {
+        .features = {
+            pkt_info.dest_port,
+            calc_mean(info->sum, info->count),
+            calc_std_dev(info->sum, info->sum_squared, info->count),
+            calc_variance(info->sum, info->sum_squared, info->count),
+            calc_mean(info->sum, info->count),
+            pkt_info.fwd_iat,
+            2919271, // fwd_iat_std using mean value
+            8480026  // fwd_iat_max using a constant value
+        }};
+
+    // Apply ML model
+    int32_t prediction = 0;
+    for (int i = 0; i < NUM_WEIGHTS; ++i) {
+        prediction += (model_in.features[i] * weights[i] / WEIGHT_SCALE);
     }
 
-    // Close the file descriptor
-    close(map_fd);
+    // Apply fixed-point representation
+    prediction = (prediction + WEIGHT_ZERO_POINT) >> FXP_VALUE;
+
+    // Apply sigmoid activation function
+    int8_t result = sigmoid(prediction);
+
+    // Make a decision based on the prediction
+    if (result >= 0) {
+        if (stats)
+            {
+                stats->allowed++;
+                bpf_printk("No of packets allowed %llu\n", stats->allowed);
+            }
+
+        return XDP_PASS;
+    } else {
+        if (stats) // Implementing access checks are compulsory else the ebpf verifier will not load it to the kernel
+
+        {
+            bpf_printk("DDOS Packet drop");
+            stats->dropped++;
+            bpf_printk("No of packets dropped %llu\n", stats->dropped);
+        }
+        return XDP_DROP;
+    }
+    
 
     // update the allowed count and XDP_PASS. Implementing access checks are
     // compulsory else the ebpf verifier will not load it to the kernel
-    if (stats)
-    {
-        stats->allowed++;
-        bpf_printk("No of packets allowed %llu\n", stats->allowed);
-    }
+
 
     return XDP_PASS;
 }

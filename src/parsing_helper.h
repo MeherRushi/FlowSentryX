@@ -155,5 +155,53 @@ static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
 
 }
 
+static 	 int parse_tcphdr(struct hdr_cursor *nh,
+                                        void *data_end,
+                                        struct tcphdr **tcphdr)
+{
+    struct tcphdr *tcph;
+    tcph = nh->pos;
+
+    // Boundary Check
+    if(tcph + 1 > data_end)
+        return -1;
+
+    // Incrementing Pointer
+    nh->pos = tcph + 1;
+
+    // Assigning the pointer
+    *tcphdr = tcph;
+
+    /* 
+     Now we return the tcph->source - NEed to change
+     */
+    return tcph->source;
+}
+
+
+static 	 int parse_udphdr(struct hdr_cursor *nh,
+                                        void *data_end,
+                                        struct udphdr **udphdr)
+{
+    struct udphdr *udph;
+    udph = nh->pos;
+
+    // Boundary Check
+    if(udph + 1 > data_end)
+        return -1;
+
+    // Incrementing Pointer
+    nh->pos = udph + 1;
+
+    // Assigning the pointer
+    *udphdr = udph;
+
+    /* 
+     Now we return the udph->source - NEed to change
+     */
+    return udph->source;
+}
+
+
 
 #endif

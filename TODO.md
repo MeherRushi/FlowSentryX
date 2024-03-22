@@ -269,3 +269,19 @@ Error: failed to load object file
 
 Error resolved by using SUDO command
 > sudo bpftool prog load fsx_kern.o /sys/fs/bpf/fsx
+
+
+Feature list :
+- 'destination_port'  
+
+- 'packet_length_mean'
+- 'packet_length_std'
+- 'packet_length_variance'
+
+- 'average_packet_size'
+
+
+# Cant do now gg
+- 'fwd_iat_mean'
+- 'fwd_iat_std'
+- 'fwd_iat_max'
