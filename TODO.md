@@ -106,10 +106,28 @@ For now we are doing layer 3 based DOS mitigation
    _Dynamic Rules Management_: You can create a user space component that communicates with the kernel space to add or remove IP addresses from the blocklist dynamically.
 
 
+ToDo List:
+
+ - [ ] Integrating the in-kernel ml model
+
+ - [ ] Refine Readme text, use better words like packet inspection and filtering, Logging etc.
  
-Integrating the in-kernel ml model
- 
- 
+ - [ ] Explain why XDP is faster and why we plan to use it.
+
+ - [ ] Describe the project in a little bit more detail and refine this.
+
+ - [ ] Write about different Attach here the content from cloudfare blog
+
+ - [ ] Also Write in detail about DDOS attack
+
+ - [ ] Fill this section with how we plan to extend our project to a stateless Firewall with Dynamic DOS and DDOS mitigation abilities.
+
+ - [ ] Add Link to the Dependencies.md page and also like a checklist version of required features
+
+ - [ ] Need a way better description for the System Architechture section
+
+
+
  
  
 
