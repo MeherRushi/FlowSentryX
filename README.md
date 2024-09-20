@@ -101,11 +101,18 @@ Refer to [Dependencies](Dependencies.md).
 
 
 ### Installation
-To install the framework, follow these steps:
+To install the framework on Debian/Ubuntu, follow these steps:
 
-1. Step-by-step installation instructions.
-2. Include any scripts or commands necessary for setup.
-3. Submodules - Installation
+1. Clone the repo using the following command:
+```
+git clone --recurse-submodules https://github.com/MeherRushi/FlowSentryX.git
+```
+2. Then, type the following command to go into the repo and install all the dependencies required:
+```
+cd FlowSentryX
+chmod +x ./install_dependencies.sh
+./install_dependencies.sh
+```
 
 ### Usage
 Provide guidance on how to use the framework:
