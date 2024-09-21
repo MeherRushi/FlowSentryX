@@ -6,13 +6,11 @@
 
 **FlowSentryX** is an open-source XDP-based fast packet processing DOS and DDOS Mitigation Framework solution designed to protect your network infrastructure from Denial of Service (DOS) and Distributed Denial of Service (DDOS) attacks at Layer 3 & 4. 
 
-> Current work is being done for Layer 3 based DOS and DDOS mitigation.
+Current work is being done for Layer 3 based DOS and DDOS mitigation.
 
 The framework is a collection of XDP programs which track your network traffic and parse packets till the IP layer and make the descision to drop packets from malicious IP addresses using different algorithms and models for DOS and DDOS mitigation.
 
 We also plan to extend the ability BlackList IP addresses and write rules manually from the user space to block certain packets. The rules will be written in the config file which will be read by the xdp program and action will be taken accordingly, hence extending the framework to act as a _Basic Firewall_.
-
-> Refine this text , use better words like packet inspection and filtering, Logging etc.
 
 
 
@@ -61,36 +59,23 @@ This framework is a set of [xdp](https://www.iovisor.org/technology/xdp) program
 
 The XDP programs parse all the packets in the ingress network traffic till the IP layer and make the descision to drop packets from malicious IP addresses using some Rate Limiting Algorithms like token bucket algorithm, fixed window algorithm and sliding window algorithm for DOS attack mitigation and using the features extracted from the packets and passing them to a trained ML model in the user space for inference of deciding whether that particular IP was involved in the DDOS attack.
 
-> Explain why XDP is faster and why we plan to use it.
-
-> Describe the project in a little bit more detail and refine this.
 
 ### Why DOS/DDOS Mitigation?
 DOS and DDOS attacks can disrupt your network, causing downtime and financial losses. Our framework helps you safeguard your infrastructure by efficiently filtering malicious traffic, ensuring your network remains operational.
 
- > Write about different Attach here the content from cloudfare blog
  - Ping of Death
  - Flood Attacks
  - Buffer overflow Attacks
 
- > Also Write in detail about DDOS attack
-
 ### Basic Firewall
-
-> Fill this section with how we plan to extend our project to a stateless Firewall with Dynamic DOS and DDOS mitigation abilities.
 
 We plan to extend the framework to an XDP based stateless Firewall, by allowing config files where the user can manually configure parameters such as the Threshold values and the time duration for black listing the IP address for the already existing features. We also plan to add Dynamic Rule Management to Manage dynamic rules and configurations, such as adding or removing IP addresses from the blocklist. This component can communicate with the kernel space to apply or remove rules as needed.
 
 Also we plan to add config files which can be used to blacklist user configured IP's and rules to drop certain packets.
 
-> Need a better description for the above
-
 
 ## Installation and Usage
 **Note**: This section is under development.
-
-
-> Add Link to the Dependencies.md page and also like a checklist version of required features
 
 
 This section will provide clear instructions on how to install and run the framework. We'll include details on dependencies, installation commands, and sample usage commands. A setup script will be provided to simplify the installation process.
@@ -116,11 +101,18 @@ Refer to [Dependencies](Dependencies.md).
 
 
 ### Installation
-To install the framework, follow these steps:
+To install the framework on Debian/Ubuntu, follow these steps:
 
-1. Step-by-step installation instructions.
-2. Include any scripts or commands necessary for setup.
-3. Submodules - Installation
+1. Clone the repo using the following command:
+```
+git clone --recurse-submodules https://github.com/MeherRushi/FlowSentryX.git
+```
+2. Then, type the following command to go into the repo and install all the dependencies required:
+```
+cd FlowSentryX
+chmod +x ./install_dependencies.sh
+./install_dependencies.sh
+```
 
 ### Usage
 Provide guidance on how to use the framework:
@@ -146,7 +138,6 @@ The XDP-based DOS and DDOS Mitigation Framework operates at the network level to
       - The plan is to create 2 Maps - Rate of Packet Arrival(per sec) per IP, and a normal Black listed IP table.
       - The packet arrival per IP per sec table is going to be updated with the count of the packet and then we need to refresh the table every one second for now - The algorithm that is going to be used is the simple Fixed window algorithm. 
       - We pick the blacklisted to the BlackList IP table and drop the packets for that particular IP.  
-   - _I think that is it_
 
 - **User Space Program** :
    - _Clear the BlackList IP table_ - 
@@ -157,10 +148,6 @@ The XDP-based DOS and DDOS Mitigation Framework operates at the network level to
 
 - **eBPF Maps and Datastructures**
     - We are planning to use BPF_HASH_ARRAY_TYPE map for storing the IP address and the Packet Per second
-    - 
-
-
-> Need a way better description for the above
 
 
 ## Rate Limiting Algorithms
@@ -225,7 +212,7 @@ Some other resources
 30) Hooking : https://en.wikipedia.org/wiki/Hooking 
 31) eBPF.io : https://ebpf.io/what-is-ebpf/#development-toolchains
 
-References from others (Didn't go through them)
+References from others:
 
 32) https://www.youtube.com/watch?v=iBkR4gvjxtE 
 33) https://blog.yadutaf.fr/2017/07/28/tracing-a-packet-journey-using-linux-tracepoints-perf-ebpf/ 
@@ -272,7 +259,6 @@ Rate Limiting Blogs:
 54) [token bucket, fixed and sliding window ](https://dev.to/satrobit/rate-limiting-using-the-token-bucket-algorithm-3cjh)
 
 
-> Need to reorder and neatly write it
 
 ## Project Status
 This project is currently in the development phase. We are actively working on building the framework and welcome contributions from the open-source community.
