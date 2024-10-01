@@ -163,7 +163,7 @@ We plan to implement a static window rate limiting algorithm. This algorithm tra
 
 
 ## References
-- [Learning eBPF and XDP Repository](https://example.com/learning-ebpf-xdp): This repository provided valuable insights into the technologies used in this project.
+- [Learning eBPF and XDP Repository](https://github.com/lizrice/learning-ebpf): This repository provided valuable insights into the technologies used in this project.
 
 References and Literature Survey
 
